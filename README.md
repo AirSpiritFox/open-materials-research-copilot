@@ -28,7 +28,7 @@ docker compose up --build
 
 Open **http://localhost:8080**. In **Settings → Backend connection**, leave the backend URL blank to use the same-origin API, enter APP_ACCESS_TOKEN if configured, and select Connect. Create your server project. Provider keys are optional and never needed for public search.
 
-Docker runs FastAPI and nginx, applies Alembic migrations and preserves database/encrypted configuration in a named volume. The default port binds to localhost. For a remotely reachable server, set a strong APP_ACCESS_TOKEN, configure HTTPS and explicit CORS origins. The backend refuses unprotected non-local access. Do not publish port 8000 directly or expose an unprotected dev installation.
+Docker runs FastAPI and nginx, applies Alembic migrations and preserves database/encrypted configuration in a named volume. The default port binds to localhost. For a remotely reachable server, set a strong APP_ACCESS_TOKEN, configure HTTPS and explicit CORS origins. Production mode refuses to start without an access token. Development mode is intentionally unauthenticated unless a token is configured, and Compose binds its public port to localhost. Do not publish port 8000 directly or expose an unprotected dev installation.
 
 PWA installation and service workers require HTTPS outside localhost; opening an HTTP LAN address on your phone does not provide a fully installable offline PWA. Use a trusted HTTPS deployment or the Pages frontend connected to your HTTPS backend.
 

@@ -16,3 +16,5 @@
 .sidebar{overflow-y:auto}.sidebar-bottom{flex-shrink:0}
 
 .paper-title,.full-abstract,.statement p,.provider-errors p{overflow-wrap:anywhere}@media(max-width:760px){input:not([type=checkbox]),textarea,select,.filters input:not([type=checkbox]),.strategy-row input:not([type=checkbox]),.target-control select,.project-picker select{font-size:1rem}.check-label{min-height:44px}.save-button{width:44px;height:44px}}
+
+.strategy-detail{grid-column:3;color:var(--muted);font-size:.75rem;overflow-wrap:anywhere}@media(max-width:760px){.strategy-detail{grid-column:2;font-size:.8rem}}

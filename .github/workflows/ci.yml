@@ -44,6 +44,8 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --no-audit --no-fund
+      - name: Record resolved dependency lock
+        run: node -e 'console.log("OMRC_LOCK_BEGIN"); console.log(require("node:fs").readFileSync("package-lock.json","utf8")); console.log("OMRC_LOCK_END")'
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
