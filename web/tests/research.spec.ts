@@ -99,6 +99,7 @@ test("backend connection preserves AI settings and saves enriched provenance",as
  await page.goto("./");
  await nav(page,"Settings");
  await page.getByRole("button",{name:"Connect",exact:true}).click();
+ await expect(page.locator(".settings-message")).toContainText("Connected.");
  await expect(page.getByLabel("AI provider",{exact:true})).toHaveValue("ollama");
  await page.getByRole("button",{name:"Save provider settings",exact:true}).click();
  await expect.poll(()=>savedSettings.llm_provider).toBe("ollama");

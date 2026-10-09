@@ -43,14 +43,15 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
-      - run: npm install --no-audit --no-fund
-      - name: Record resolved dependency lock
-        run: node -e 'console.log("OMRC_LOCK_BEGIN"); console.log(require("node:fs").readFileSync("package-lock.json","utf8")); console.log("OMRC_LOCK_END")'
+      - run: npm ci --no-audit --no-fund
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      - name: Browser failure context
+        if: failure()
+        run: node -e 'const fs=require("node:fs");function walk(p){if(!fs.existsSync(p))return;for(const e of fs.readdirSync(p,{withFileTypes:true})){const q=p+"/"+e.name;if(e.isDirectory())walk(q);else if(e.name==="error-context.md")console.log(q+"\n"+fs.readFileSync(q,"utf8"));}}walk("test-results");'
       - uses: actions/upload-artifact@v7
         if: always()
         with:
