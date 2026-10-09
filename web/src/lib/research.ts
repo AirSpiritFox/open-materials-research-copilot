@@ -105,7 +105,7 @@ export async function searchLiterature(input:SearchInput,signal?:AbortSignal):Pr
  const year=new Date().getUTCFullYear()+1;for(const value of [input.year_from,input.year_to])if(value!==null&&(!Number.isInteger(value)||value<1000||value>year))throw new Error("Enter a valid publication year.");
  if(input.year_from&&input.year_to&&input.year_from>input.year_to)throw new Error("The starting year must not be later than the ending year.");
  if(input.reviews_only&&input.preprints_only)throw new Error("Select either reviews or preprints, not both.");
- const queries=input.queries.filter(q=>q.enabled&&q.query.trim()).slice(0,7).map(q=>actualStrategy(q,input));if(!queries.length)throw new Error("Enable at least one nonempty search query.");
+ const queries=input.queries.filter(q=>q.enabled&&q.query.trim()&&q.kind!=="Crossref metadata fallback").slice(0,7).map(q=>actualStrategy(q,input));if(!queries.length)throw new Error("Enable at least one nonempty search query.");
  const collected:Paper[][]=Array.from({length:queries.length},()=>[]),errors:ProviderError[]=[];let cursor=0,limited=false;const performed:Strategy[]=[];
  async function worker(){
   while(cursor<queries.length&&!limited){

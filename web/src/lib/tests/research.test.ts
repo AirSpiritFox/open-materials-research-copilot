@@ -36,3 +36,14 @@ test("Crossref fallback remains metadata-only and preserves provider failure",as
   assert.equal(result.queries.at(-1)?.kind,"Crossref metadata fallback");
  });
 });
+
+test("repeating a saved fallback strategy does not search the diagnostic row",async()=>{
+ let calls=0;
+ await withFetch(async()=>{calls++;return new Response(JSON.stringify({results:[]}),{status:200});},async()=>{
+  const request=input("reused-fallback-e");
+  request.queries.push({kind:"Crossref metadata fallback",query:"old fallback",enabled:true});
+  const result=await searchLiterature(request);
+  assert.equal(calls,1);
+  assert.equal(result.queries.length,1);
+ });
+});

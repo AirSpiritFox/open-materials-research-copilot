@@ -57,7 +57,7 @@ class Question(StrictModel):
     question: str = Field(min_length=3, max_length=3000)
 
 class SearchRequest(Question):
-    queries: list[Query] = Field(default_factory=list, max_length=7)
+    queries: list[Query] = Field(default_factory=list, max_length=8)
     year_from: int | None = Field(default=None, ge=1000, le=2200)
     year_to: int | None = Field(default=None, ge=1000, le=2200)
     oa_only: bool = False

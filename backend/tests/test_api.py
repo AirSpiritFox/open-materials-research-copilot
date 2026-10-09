@@ -183,3 +183,16 @@ def test_crossref_keyword_fallback_preserves_error_and_unknown_access(client):
     assert value["errors"][0]["code"] == "rate_limited"
     assert value["queries"][-1]["kind"] == "Crossref metadata fallback"
     asyncio.run(client.app.state.provider_client.close())
+
+def test_saved_fallback_strategy_is_reusable(client):
+    calls = []
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(200,json={"results":[]})
+    client.app.state.provider_client = ProviderClient(retries=0,transport=httpx.MockTransport(handler))
+    queries = [{"kind":"direct","query":"tellurite","enabled":True},{"kind":"Crossref metadata fallback","query":"tellurite","enabled":True}]
+    response = client.post("/api/search",json={"question":"tellurite optics","queries":queries})
+    assert response.status_code == 200
+    assert len(calls) == 1
+    assert len(response.json()["queries"]) == 1
+    asyncio.run(client.app.state.provider_client.close())

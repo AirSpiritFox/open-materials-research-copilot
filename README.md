@@ -136,3 +136,7 @@ compose.yaml
 ```
 
 [ARCHITECTURE.md](ARCHITECTURE.md) defines the data contract, security model and Phase 2–4 plan. Backend and browser providers implement the same normalized source shape; no AI content overwrites original scientific evidence.
+
+## Development sample
+
+After migrations, run `python -m app.seed` from `backend` (or `docker compose exec api python -m app.seed`) to create the tellurite project without invented literature or property values. The browser creates the same kind of empty starter workspace automatically.

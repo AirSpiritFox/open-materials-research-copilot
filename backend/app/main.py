@@ -191,7 +191,7 @@ def create_app(database_url=None, initialize=False):
         year = datetime.now(timezone.utc).year
         provider = OpenAlex(app.state.provider_client, configuration())
         for q in queries:
-            if not q.enabled:
+            if not q.enabled or q.kind == "Crossref metadata fallback":
                 continue
             lower, upper = body.year_from, body.year_to
             kind = q.kind.casefold()
