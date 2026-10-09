@@ -24,3 +24,15 @@ test("an already aborted request is cancelled before network access",async()=>{c
 test("cached metadata preserves original retrieval time and avoids a second fetch",async()=>{let calls=0;await withFetch(async()=>{calls++;return new Response(JSON.stringify({results:[record()]}),{status:200});},async()=>{const a=await searchLiterature(input("test-cache-c")),b=await searchLiterature(input("test-cache-c"));assert.equal(calls,1);assert.equal(a.papers[0].provenance[0].retrieved_at,b.papers[0].provenance[0].retrieved_at);});});
 
 test("source quote verification preserves original whitespace",()=>{const p=paper({abstract:"Glass  measurements\nrequire explicit conditions."});const result=basicBrief("glass",[p]);const citation=result.statements[0].citations[0];assert.ok(p.abstract!.includes(citation.quote));});
+
+test("Crossref fallback remains metadata-only and preserves provider failure",async()=>{
+ await withFetch(async url=>String(url).includes("crossref")?new Response(JSON.stringify({message:{items:[{DOI:"10.1234/fallback-real-shape",title:["Fallback metadata fixture"],type:"journal-article"}]}}),{status:200}):new Response("",{status:429,headers:{"Retry-After":"120"}}),async()=>{
+  const result=await searchLiterature(input("fallback-keywords-d"));
+  assert.equal(result.papers.length,1);
+  assert.equal(result.papers[0].is_oa,null);
+  assert.equal(result.papers[0].source_basis,"metadata");
+  assert.equal(result.papers[0].provenance[0].provider,"Crossref");
+  assert.equal(result.errors[0].provider,"OpenAlex");
+  assert.equal(result.queries.at(-1)?.kind,"Crossref metadata fallback");
+ });
+});

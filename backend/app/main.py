@@ -231,6 +231,24 @@ def create_app(database_url=None, initialize=False):
                 errors.append(error_for("OpenAlex", result))
             else:
                 papers.extend(result)
+        if not papers and errors and performed and not body.oa_only and not body.reviews_only:
+            query = performed[0].query
+            fallback = performed[0].model_copy(update={
+                "kind": "Crossref metadata fallback", "query": query, "filters": [], "sort": None,
+                "note": "OpenAlex was unavailable. Crossref supplies bibliographic metadata; OA status remains unknown.",
+            })
+            applied = []
+            if body.year_from:
+                applied.append(f"from-pub-date:{body.year_from}-01-01")
+            if body.year_to:
+                applied.append(f"until-pub-date:{body.year_to}-12-31")
+            if body.preprints_only:
+                applied.append("type:posted-content")
+            performed.append(fallback.model_copy(update={"filters": applied}))
+            try:
+                papers.extend(await Crossref(app.state.provider_client, configuration()).search(query, body))
+            except Exception as exc:
+                errors.append(error_for("Crossref", exc))
         unique = deduplicate(papers)
         return {"papers": [p.model_dump() for p in unique], "errors": errors,
                 "queries": [q.model_dump() for q in performed], "deduplicated": len(papers) - len(unique)}

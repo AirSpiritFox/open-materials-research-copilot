@@ -92,7 +92,7 @@ class SavePaper(StrictModel):
 class Notes(StrictModel):
     content: str = Field(max_length=100000)
 class SavedSearch(Question):
-    queries: list[Query] = Field(max_length=7)
+    queries: list[Query] = Field(max_length=8)
 class DOIRequest(StrictModel):
     doi: str = Field(min_length=3, max_length=500)
 class SynthesisRequest(Question):

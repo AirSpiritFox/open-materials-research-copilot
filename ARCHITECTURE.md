@@ -58,3 +58,7 @@ No paywall bypass, ResearchGate scraping, arbitrary uploaded-code execution, HTM
 4. Semantic retrieval, contradiction/evidence graph, hypothesis workflow, stronger offline and multi-device sync.
 
 The eventual tellurite acceptance query requires Phases 2–4. Phase 1 generates editable searches, retrieves/deduplicates real records, saves sources and produces only an abstract/metadata-limited brief. It cannot claim to extract compositions or compare measured properties and pages before full-text evidence exists.
+
+## Resilience validation
+
+Live CI can encounter OpenAlex shared-IP rate limits. On a failed search without results, an explicitly labelled Crossref bibliographic query provides metadata fallback. OA-only/review-only filters disable fallback; unknown access status is never promoted to open access. Both provider errors and performed queries remain visible.

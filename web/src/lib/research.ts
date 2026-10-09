@@ -6,13 +6,13 @@ const object=(value:unknown):Obj=>value!==null&&typeof value==="object"&&!Array.
 const array=(value:unknown):unknown[]=>Array.isArray(value)?value:[];
 const str=(value:unknown):string|null=>typeof value==="string"&&value.trim()?value.trim():null;
 const integer=(value:unknown):number|null=>typeof value==="number"&&Number.isSafeInteger(value)&&value>=0?value:null;
-export function safeUrl(value:unknown):string|null{if(typeof value!=="string")return null;try{const u=new URL(value);return ["https:","http:"].includes(u.protocol)&&!u.username&&!u.password?u.href:null;}catch{return null;}}
+export function safeUrl(value:unknown):string|null{if(typeof value!=="string"||value.length>3000)return null;try{const u=new URL(value);return ["https:","http:"].includes(u.protocol)&&!u.username&&!u.password?u.href:null;}catch{return null;}}
 export function normalizeDoi(value:unknown):string|null{
  if(typeof value!=="string")return null;let doi=value.trim();
  if(/^https?:\/\/(?:dx\.)?doi\.org\//i.test(doi)){try{doi=new URL(doi).pathname.slice(1);}catch{return null;}}
  else doi=doi.replace(/^doi\s*:\s*/i,"");
  try{doi=decodeURIComponent(doi);}catch{return null;}doi=doi.trim().toLowerCase();
- return /^10\.\d{4,9}\/[^\s<>"]+$/.test(doi)&&doi.length<=512?doi:null;
+ return /^10\.\d{4,9}\/[^\s<>"]+$/.test(doi)&&doi.length<=300?doi:null;
 }
 const STOP=new Set("a an and are as at be by for from how in into is it of on or that the their these this to using with find investigate identify compare studied experimentally containing applications what still requires major strongest candidates relevant".split(" "));
 const terms=(question:string)=>question.replace(/[^\p{L}\p{N}\s-]/gu," ").split(/\s+/).filter(t=>t.length>1&&!STOP.has(t.toLowerCase()));
@@ -35,8 +35,8 @@ export function generateStrategies(question:string):Strategy[]{
  {kind:"Foundational candidates",query:material,enabled:true,note:"Older papers sorted by OpenAlex citation count; age and citations do not establish scientific quality."}
  ];
 }
-function plainText(value:unknown):string|null{const text=str(value);if(!text)return null;return text.replace(/<[^>]*>/g," ").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&amp;/g,"&").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/\s+/g," ").trim().slice(0,60000)||null;}
-export function reconstructAbstract(value:unknown):string|null{const index=object(value),words:(string|undefined)[]=[];for(const [word,positions]of Object.entries(index))for(const p of array(positions))if(typeof p==="number"&&Number.isInteger(p)&&p>=0&&p<12000)words[p]=word;return words.length?words.map(w=>w??"").join(" ").trim()||null:null;}
+function plainText(value:unknown):string|null{const text=str(value);if(!text)return null;return text.replace(/<[^>]*>/g," ").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&amp;/g,"&").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/\s+/g," ").trim().slice(0,40000)||null;}
+export function reconstructAbstract(value:unknown):string|null{const index=object(value),words:(string|undefined)[]=[];for(const [word,positions]of Object.entries(index))for(const p of array(positions))if(typeof p==="number"&&Number.isInteger(p)&&p>=0&&p<12000)words[p]=word;return words.length?words.map(w=>w??"").join(" ").trim().slice(0,40000)||null:null;}
 function publicationType(value:unknown):PublicationType{if(value==="posted-content"||value==="preprint")return "preprint";if(value==="review")return "review";if(value==="proceedings-article"||value==="conference-paper")return "conference";if(value==="dataset")return "dataset";if(value==="journal-article"||value==="article")return "article";return "other";}
 export function fromOpenAlex(value:unknown,retrievedAt=new Date().toISOString()):Paper{
  const work=object(value),doi=normalizeDoi(work.doi),primary=object(work.primary_location),access=object(work.open_access);
@@ -117,8 +117,23 @@ export async function searchLiterature(input:SearchInput,signal?:AbortSignal):Pr
    }catch(error){checkAbort(signal);const normalized=normalizedError(error,"OpenAlex");if(normalized.code==="RATE_LIMITED")limited=true;if(!errors.some(e=>e.code===normalized.code&&e.message===normalized.message))errors.push(normalized);}
   }
  }
- await Promise.all([worker(),worker()]);const all=collected.flat(),papers=deduplicate(all);
+ await Promise.all([worker(),worker()]);const all=collected.flat();
  if(limited&&performed.length<queries.length)errors.push({provider:"OpenAlex",code:"QUERIES_SKIPPED",message:"Remaining queries were skipped because the provider rate limit was reached."});
+ if(!all.length&&errors.length&&!input.oa_only&&!input.reviews_only){
+  const query=queries[0].query,url=new URL(CROSSREF),filters:string[]=[];
+  url.searchParams.set("query.bibliographic",query);url.searchParams.set("rows","20");
+  if(input.year_from)filters.push("from-pub-date:"+input.year_from+"-01-01");
+  if(input.year_to)filters.push("until-pub-date:"+input.year_to+"-12-31");
+  if(input.preprints_only)filters.push("type:posted-content");
+  if(filters.length)url.searchParams.set("filter",filters.join(","));
+  performed.push({kind:"Crossref metadata fallback",query,enabled:true,filters,note:"OpenAlex was unavailable. Crossref supplies bibliographic metadata; OA status remains unknown."});
+  try{
+   const {value,retrievedAt}=await requestJson(url.href,"Crossref",signal),items=object(object(value).message).items;
+   if(!Array.isArray(items))throw new Error("Crossref returned no results array.");
+   for(const item of items){try{all.push(fromCrossref(item,retrievedAt));}catch(error){errors.push(normalizedError(error,"Crossref"));}}
+  }catch(error){checkAbort(signal);errors.push(normalizedError(error,"Crossref"));}
+ }
+ const papers=deduplicate(all);
  return {papers,errors,queries:performed,deduplicated:all.length-papers.length};
 }
 export async function lookupDoi(value:string,signal?:AbortSignal):Promise<SearchResult>{

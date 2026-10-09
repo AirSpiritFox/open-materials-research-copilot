@@ -55,6 +55,7 @@ test("projects can be created and exported; later phases are honest",async({page
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
 });
 test("provider failures remain visible without invented results",async({page})=>{
+ await page.route("https://api.crossref.org/**",route=>route.fulfill({status:503,body:"Unavailable"}));
  await page.route("https://api.openalex.org/**",route=>route.fulfill({status:503,body:"Unavailable"}));
  await page.goto("./");
  await page.getByRole("button",{name:"Build search strategy"}).click();

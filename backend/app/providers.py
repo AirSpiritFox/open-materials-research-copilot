@@ -236,6 +236,24 @@ class Crossref:
     name = "crossref"
     def __init__(self, client: ProviderClient, config: dict):
         self.client, self.config = client, config
+    async def search(self, query: str, filters: SearchRequest) -> list[Paper]:
+        params = {"query.bibliographic": query[:1500], "rows": 20}
+        if self.config.get("crossref_email"):
+            params["mailto"] = self.config["crossref_email"]
+        constraints = []
+        if filters.year_from:
+            constraints.append(f"from-pub-date:{filters.year_from}-01-01")
+        if filters.year_to:
+            constraints.append(f"until-pub-date:{filters.year_to}-12-31")
+        if filters.preprints_only:
+            constraints.append("type:posted-content")
+        if constraints:
+            params["filter"] = ",".join(constraints)
+        data = await self.client.get(self.name, "https://api.crossref.org/works", params=params)
+        items = _mapping(data.get("message")).get("items")
+        if not isinstance(items, list):
+            raise ProviderFailure(self.name, "invalid_response", "Crossref returned no valid result list.")
+        return [self._paper(record) for record in items[:20] if isinstance(record, dict) and _doi(record.get("DOI"))]
     async def lookup(self, doi: str) -> Paper:
         doi = normalize_doi(doi)
         params = {"mailto": self.config["crossref_email"]} if self.config.get("crossref_email") else {}
@@ -243,6 +261,9 @@ class Crossref:
         record = _mapping(data.get("message"))
         if not record.get("DOI") or _doi(record.get("DOI")) != doi:
             raise ProviderFailure(self.name, "invalid_response", "Crossref returned no matching DOI metadata.")
+        return self._paper(record)
+    def _paper(self, record):
+        doi = normalize_doi(record["DOI"])
         authors = []
         for author in _sequence(record.get("author"))[:200]:
             author = _mapping(author)

@@ -110,7 +110,7 @@ GitHub Actions runs checks on pushes and pull requests. It uploads the built PWA
 See [.env.example](.env.example) and [backend/ARCHITECTURE.md](backend/ARCHITECTURE.md). Optional provider/LLM credentials can be entered through Settings after connecting to your own backend; they are encrypted server-side and never returned to the browser. Keep the encryption key with the database backup; do not rotate it casually.
 
 - OpenAlex: public basic queries; optional free key improves daily quota.
-- Crossref: public DOI metadata, optional contact email.
+- Crossref: public DOI metadata and keyword fallback if OpenAlex fails; optional contact email. Fallback is disabled for OA-only/review-only searches because Crossref cannot reliably enforce those filters.
 - Semantic Scholar: optional enrichment; throttling/failure does not break other providers.
 - Unpaywall: DOI resolution only, requires a contact email.
 - OpenAI-compatible: user-selected API key/model; may incur provider charges.

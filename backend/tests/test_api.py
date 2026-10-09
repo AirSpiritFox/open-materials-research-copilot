@@ -166,3 +166,20 @@ def test_server_applies_strategy_dates_and_sort(client):
     assert any("type:review" in p.get("filter","") for p in params)
     assert all(q["filters"] for q in response.json()["queries"])
     asyncio.run(client.app.state.provider_client.close())
+
+def test_crossref_keyword_fallback_preserves_error_and_unknown_access(client):
+    def handler(request):
+        if request.url.host == "api.openalex.org":
+            return httpx.Response(429,headers={"Retry-After":"120"})
+        return httpx.Response(200,json={"message":{"items":[{"DOI":"10.1234/fallback","title":["Metadata fixture"],"type":"journal-article"}]}})
+    client.app.state.provider_client = ProviderClient(retries=0,transport=httpx.MockTransport(handler))
+    response = client.post("/api/search",json={"question":"tellurite optics","queries":[{"kind":"direct","query":"tellurite"}]})
+    value = response.json()
+    assert response.status_code == 200
+    assert len(value["papers"]) == 1
+    assert value["papers"][0]["is_oa"] is None
+    assert value["papers"][0]["source_basis"] == "metadata"
+    assert value["papers"][0]["provenance"][0]["provider"] == "crossref"
+    assert value["errors"][0]["code"] == "rate_limited"
+    assert value["queries"][-1]["kind"] == "Crossref metadata fallback"
+    asyncio.run(client.app.state.provider_client.close())
