@@ -1,0 +1,84 @@
+name: Phase 1 checks
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - run: python -m pytest -q
+      - name: Run migrations and API health check
+        run: |
+          alembic upgrade head
+          uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/copilot-api.log 2>&1 &
+          for attempt in 1 2 3 4 5; do
+            if curl --fail http://127.0.0.1:8000/api/health; then exit 0; fi
+            sleep 2
+          done
+          cat /tmp/copilot-api.log
+          exit 1
+      - name: Optional live OpenAlex and Crossref diagnostic
+        continue-on-error: true
+        run: python ../scripts/check_live_sources.py
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    env:
+      NEXT_PUBLIC_BASE_PATH: /open-materials-research-copilot
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: frontend-checks
+          path: |
+            web/playwright-report
+            web/test-results
+            web/package-lock.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: installable-pwa
+          path: web/out
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build development services
+        run: docker compose build
+      - name: Start app and check both services
+        run: |
+          docker compose up -d
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if curl --fail http://localhost:8080/api/health; then
+              curl --fail http://localhost:8080/ > /dev/null
+              exit 0
+            fi
+            sleep 3
+          done
+          docker compose logs
+          exit 1
+      - name: Stop services
+        if: always()
+        run: docker compose down

@@ -1,0 +1,21 @@
+import {readFile,writeFile,readdir} from "node:fs/promises";
+import {createHash} from "node:crypto";
+import sharp from "sharp";
+const base=process.env.NEXT_PUBLIC_BASE_PATH||"";
+for(const size of [192,512]) await sharp("public/icon.svg").resize(size,size).png().toFile("out/icon-"+size+".png");
+const manifest={id:base+"/",name:"Open Materials Research Copilot",short_name:"Open Materials",description:"Open literature and traceable research",start_url:base+"/",scope:base+"/",display:"standalone",background_color:"#f4f7fa",theme_color:"#112a3a",icons:[{src:base+"/icon-192.png",sizes:"192x192",type:"image/png",purpose:"any maskable"},{src:base+"/icon-512.png",sizes:"512x512",type:"image/png",purpose:"any maskable"}]};
+await writeFile("out/manifest.webmanifest",JSON.stringify(manifest,null,2));
+async function walk(dir){let result=[];for(const e of await readdir(dir,{withFileTypes:true})){const p=dir+"/"+e.name;if(e.isDirectory())result.push(...await walk(p));else if(!p.endsWith(".map"))result.push(p);}return result;}
+const paths=(await walk("out")).filter(p=>!p.endsWith("sw.js"));
+const version=createHash("sha256");
+for(const p of paths)version.update(await readFile(p));
+const cache="omrc-"+version.digest("hex").slice(0,12);
+const assets=paths.map(p=>base+p.slice(3));assets.push(base+"/");
+const sw=`const CACHE=${JSON.stringify(cache)}, ASSETS=${JSON.stringify(assets)}, BASE=${JSON.stringify(base)};
+self.addEventListener("install",event=>{event.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)));});
+self.addEventListener("activate",event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith("omrc-")&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
+self.addEventListener("message",event=>{if(event.data==="ACTIVATE_UPDATE")self.skipWaiting();});
+self.addEventListener("fetch",event=>{const r=event.request,u=new URL(r.url);if(r.method!=="GET"||u.origin!==self.location.origin||u.pathname.includes("/api/")||r.headers.has("Authorization"))return;if(r.mode==="navigate"){event.respondWith(fetch(r).catch(()=>caches.match(BASE+"/")));return;}if(ASSETS.includes(u.pathname))event.respondWith(caches.match(r).then(cached=>cached||fetch(r)));});
+`;
+await writeFile("out/sw.js",sw);
+console.log("PWA assets generated:",paths.length,"files",cache);

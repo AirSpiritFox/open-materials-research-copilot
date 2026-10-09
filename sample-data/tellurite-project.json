@@ -1,0 +1,14 @@
+{
+  "format": "open-materials-project",
+  "version": 1,
+  "description": "Development example. No invented papers, properties or evidence.",
+  "project": {
+    "id": "sample-tellurite",
+    "name": "Tellurite optical research",
+    "question": "Investigate tellurite-based glasses for optical or volumetric-display applications. Identify experimentally studied compositions, rare-earth dopants, synthesis routes, optical properties, thermal stability and limitations.",
+    "notes": "Research checklist:\n- Verify whether each source is a preprint or published article.\n- Retrieve lawful OA copies when available.\n- Record conditions before comparing measured properties.\n- Full-text evidence extraction is deferred to Phase 2.",
+    "papers": [],
+    "searches": [],
+    "created_at": "2026-10-09T00:00:00Z"
+  }
+}

@@ -1,0 +1,113 @@
+import {test,expect} from "@playwright/test";
+const work={id:"https://openalex.org/W12345",doi:"https://doi.org/10.1234/test-glass",display_name:"TEST FIXTURE: Rare-earth tellurite glass",title:"TEST FIXTURE: Rare-earth tellurite glass",publication_year:2024,type:"preprint",cited_by_count:3,authorships:[{author:{display_name:"Test Author"}}],primary_location:{source:{display_name:"Test repository"},landing_page_url:"https://example.org/test",is_oa:true},best_oa_location:{landing_page_url:"https://example.org/test",pdf_url:"https://example.org/test.pdf",license:"cc-by"},open_access:{is_oa:true,oa_status:"green",oa_url:"https://example.org/test.pdf"},abstract_inverted_index:{This:[0],fixture:[1],reports:[2],optical:[3],measurements:[4]}};
+async function nav(page:import("@playwright/test").Page,name:string){const menu=page.getByRole("button",{name:"Open navigation",exact:true});if(await menu.isVisible())await menu.click();await page.getByRole("navigation",{name:"Primary navigation"}).getByRole("button",{name:new RegExp("^"+name+"(?:\\s|$)")}).click();}
+test("search, deduplicate, inspect provenance, save and keep notes offline",async({page,context})=>{
+ await page.route("https://api.openalex.org/**",route=>route.fulfill({contentType:"application/json",body:JSON.stringify({meta:{count:1},results:[work]})}));
+ await page.goto("./");
+ await expect(page.getByLabel("Current project")).toContainText("Tellurite");
+ await page.getByRole("button",{name:"Build search strategy"}).click();
+ await expect(page.locator(".strategy-row")).toHaveCount(7);
+ await page.getByRole("button",{name:"Search open literature"}).click();
+ await expect(page.locator(".paper-card")).toHaveCount(1);
+ await expect(page.locator(".paper-card")).toContainText("PREPRINT");
+ await page.getByRole("button",{name:"View source",exact:true}).click();
+ await expect(page.getByRole("dialog")).toContainText("OA location found · not ingested");
+ await expect(page.getByRole("dialog")).toContainText("This fixture reports optical measurements");
+ await page.getByRole("tab",{name:"Provenance",exact:true}).click();
+ await expect(page.getByRole("dialog")).toContainText("W12345");
+ await expect(page.getByRole("dialog")).toContainText("Retrieved");
+ await page.getByRole("button",{name:"Close paper"}).click();
+ await page.getByRole("button",{name:"Save paper",exact:true}).click();
+ await expect(page.getByRole("button",{name:"Paper saved",exact:true})).toBeVisible();
+ await nav(page,"Notebook");
+ await page.getByLabel("Project notes").fill("Check wavelength conditions before comparing measurements.");
+ await page.getByRole("button",{name:"Save notes",exact:true}).click();
+ await expect(page.getByText("Notes saved.",{exact:true})).toBeVisible();
+ await page.reload();
+ await nav(page,"Notebook");
+ await expect(page.getByLabel("Project notes")).toHaveValue("Check wavelength conditions before comparing measurements.");
+ await page.evaluate(async()=>{await navigator.serviceWorker.ready;await new Promise<void>(resolve=>{if(navigator.serviceWorker.controller)resolve();else navigator.serviceWorker.addEventListener("controllerchange",()=>resolve(),{once:true});});});
+ await context.setOffline(true);
+ await page.reload();
+ await expect(page.getByText("Offline · your saved on-device papers and notes remain available. Searches need internet.",{exact:true})).toBeVisible();
+ await nav(page,"Papers");
+ await expect(page.locator(".paper-card")).toHaveCount(1);
+ await expect(page.locator(".paper-card")).toContainText("TEST FIXTURE");
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+ await context.setOffline(false);
+});
+test("projects can be created and exported; later phases are honest",async({page})=>{
+ await page.goto("./");
+ await nav(page,"Projects");
+ await page.getByRole("button",{name:"New project",exact:true}).click();
+ await page.getByLabel("Project name",{exact:true}).fill("My optical study");
+ await page.getByLabel("Research question",{exact:true}).fill("What has been measured?");
+ await page.getByRole("button",{name:"Create project",exact:true}).click();
+ await expect(page.locator(".project-card").filter({hasText:"My optical study"})).toBeVisible();
+ const download=page.waitForEvent("download");
+ await page.getByRole("button",{name:"Export My optical study",exact:true}).click();
+ expect((await download).suggestedFilename()).toMatch(/\.json$/);
+ await nav(page,"Evidence");
+ await expect(page.getByText("PHASE 2",{exact:true})).toBeVisible();
+ await nav(page,"Settings");
+ await expect(page.getByText("Backend connection",{exact:true})).toBeVisible();
+ await expect(page.getByText("Install on your phone",{exact:true})).toBeVisible();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+});
+test("provider failures remain visible without invented results",async({page})=>{
+ await page.route("https://api.openalex.org/**",route=>route.fulfill({status:503,body:"Unavailable"}));
+ await page.goto("./");
+ await page.getByRole("button",{name:"Build search strategy"}).click();
+ const checkboxes=page.locator(".strategy-row input[type=checkbox]");
+ for(let i=1;i<await checkboxes.count();i++)await checkboxes.nth(i).uncheck();
+ await page.getByRole("button",{name:"Search open literature"}).click();
+ await expect(page.locator(".provider-errors")).toBeVisible({timeout:45000});
+ await expect(page.locator(".paper-card")).toHaveCount(0);
+ await expect(page.getByText("No matching papers returned",{exact:true})).toBeVisible();
+});
+
+test("rapid saves preserve each selected paper",async({page})=>{
+ const second={...work,id:"https://openalex.org/W67890",doi:"https://doi.org/10.1234/second-glass",display_name:"TEST FIXTURE: Second material",title:"TEST FIXTURE: Second material"};
+ await page.route("https://api.openalex.org/**",route=>route.fulfill({contentType:"application/json",body:JSON.stringify({results:[work,second]})}));
+ await page.goto("./");
+ await page.getByRole("button",{name:"Build search strategy"}).click();
+ await page.getByRole("button",{name:"Search open literature"}).click();
+ await expect(page.locator(".paper-card")).toHaveCount(2);
+ await page.getByRole("button",{name:"Save paper",exact:true}).first().click();
+ await page.getByRole("button",{name:"Save paper",exact:true}).last().click();
+ await expect(page.getByRole("button",{name:"Paper saved",exact:true})).toHaveCount(2);
+ await page.reload();
+ await nav(page,"Papers");
+ await expect(page.locator(".paper-card")).toHaveCount(2);
+});
+test("backend connection preserves AI settings and saves enriched provenance",async({page})=>{
+ const paper={id:"test-paper",title:"TEST FIXTURE: Server paper",authors:["Test Author"],year:2024,journal:"Test journal",doi:"10.1234/server",publication_type:"article",citations:{OpenAlex:1},is_oa:true,oa_url:"https://example.org/source",pdf_url:null,abstract:"A test abstract.",source_basis:"abstract",provenance:[{provider:"OpenAlex",record_id:"test-paper",retrieved_at:"2026-01-01T00:00:00Z",source_url:"https://example.org/source",doi:"10.1234/server",oa_status:"green",license:null}]};
+ let project={id:"server-project",name:"Server study",question:"Optical materials",notes:"",papers:[paper],searches:[] as unknown[],created_at:"2026-01-01T00:00:00Z"};
+ let savedSettings:Record<string,unknown>={};
+ await page.route("**/api/**",async route=>{
+   const request=route.request(),path=new URL(request.url()).pathname,method=request.method();
+   let body:unknown={};
+   if(path.endsWith("/health"))body={status:"ok"};
+   else if(path.endsWith("/settings")){if(method==="PUT")savedSettings=request.postDataJSON();body={llm_provider:"ollama",model:"test-model",configured:{}};}
+   else if(path.endsWith("/enrich"))body={paper:{...paper,provenance:[...paper.provenance,{...paper.provenance[0],provider:"Unpaywall",record_id:"10.1234/server"}]},errors:[]};
+   else if(path.endsWith("/papers")){project={...project,papers:[request.postDataJSON().paper]};body={ok:true};}
+   else if(path.endsWith("/projects"))body=[project];
+   else if(path.endsWith("/server-project"))body=project;
+   else return route.fulfill({status:404,contentType:"application/json",body:JSON.stringify({detail:"Unexpected test route"})});
+   await route.fulfill({contentType:"application/json",body:JSON.stringify(body)});
+ });
+ await page.goto("./");
+ await nav(page,"Settings");
+ await page.getByRole("button",{name:"Connect",exact:true}).click();
+ await expect(page.getByLabel("AI provider",{exact:true})).toHaveValue("ollama");
+ await page.getByRole("button",{name:"Save provider settings",exact:true}).click();
+ await expect.poll(()=>savedSettings.llm_provider).toBe("ollama");
+ await nav(page,"Papers");
+ await page.getByRole("button",{name:"View source",exact:true}).click();
+ await page.getByRole("button",{name:"Check OA & enrich metadata",exact:true}).click();
+ await expect.poll(()=>project.papers[0].provenance.length).toBe(2);
+ await page.getByRole("button",{name:"Close paper"}).click();
+ await page.getByRole("button",{name:"View source",exact:true}).click();
+ await page.getByRole("tab",{name:"Provenance",exact:true}).click();
+ await expect(page.getByRole("dialog")).toContainText("Unpaywall");
+});
