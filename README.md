@@ -39,7 +39,7 @@ PWA installation and service workers require HTTPS outside localhost; opening an
 3. Choose filters and **Search open literature**. Queries actually used are retained with the project.
 4. Open original records and check provenance. Save useful papers to the current project.
 5. Keep your own notes. Export project JSON and citation bibliographies.
-6. Prepare a brief from at most 12 available abstracts/metadata records. Configure an optional backend model for AI synthesis.
+6. Prepare a brief from a bounded selection of available abstracts/metadata records (up to eight sent to a configured model). Configure an optional backend model for AI synthesis.
 
 The sample project contains the tellurite question but **no invented papers or measured data**. Search results come from real provider requests. Test fixtures are clearly marked and isolated in test directories.
 
@@ -78,7 +78,7 @@ In another terminal:
 
 ```sh
 cd web
-npm install
+npm ci
 npm run dev
 ```
 
@@ -93,7 +93,7 @@ python -m pytest -q
 
 ```sh
 cd web
-npm install
+npm ci
 npm run typecheck
 npm test
 npm run build
@@ -123,7 +123,7 @@ Provider quotas and CORS availability may change. Browser failures are explicit 
 ```
 ARCHITECTURE.md
 backend/             FastAPI, schemas, providers, LLM adapters, database
-  alembic/           Versioned migrations
+  migrations/           Versioned migrations
   tests/             Mocked API and scientific integrity tests
 web/
   src/app/           Responsive PWA interface

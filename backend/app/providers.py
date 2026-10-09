@@ -204,8 +204,10 @@ class OpenAlex:
         publication_type = {"article": "article", "review": "review", "preprint": "preprint", "proceedings-article": "conference", "conference-paper": "conference", "dataset": "dataset"}.get(record.get("type"), "other")
         count = _integer(record.get("cited_by_count"))
         return Paper(id=stable_id(self.name, record_id, doi), title=plain_text(record.get("display_name") or record.get("title"), 2000) or "Untitled record", authors=authors, year=_year(record.get("publication_year")), journal=plain_text(source.get("display_name"), 1000), doi=doi, publication_type=publication_type, citations={self.name: count} if count is not None else {}, is_oa=is_oa, oa_url=safe_url(location.get("landing_page_url") or location.get("pdf_url")) if location_open else None, pdf_url=safe_url(location.get("pdf_url")) if location_open else None, abstract=abstract, source_basis="abstract" if abstract else "metadata", provenance=[_provenance(self.name, record_id, doi, record.get("id"), is_oa, location.get("license"))])
-    async def search(self, query: str, filters: SearchRequest) -> list[Paper]:
+    async def search(self, query: str, filters: SearchRequest, sort: str | None = None) -> list[Paper]:
         params = {**self._params(), "search": query[:1500], "per_page": 25}
+        if sort in {"cited_by_count:desc", "publication_date:desc"}:
+            params["sort"] = sort
         constraints = []
         if filters.year_from is not None:
             constraints.append(f"from_publication_date:{filters.year_from}-01-01")

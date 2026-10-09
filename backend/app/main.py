@@ -2,11 +2,13 @@ import asyncio
 import hashlib
 import json
 import os
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 from sqlalchemy import delete, select
 from app.db import Base, Project, PaperRecord, ProjectPaper, SearchRecord, make_engine, make_session
 from app.schemas import (DOIRequest, Notes, ProjectCreate, SavePaper, SavedSearch,
@@ -38,15 +40,17 @@ def create_app(database_url=None, initialize=False):
 
     app = FastAPI(title="Open Materials Research Copilot", version="0.1.0", lifespan=lifespan,
                   docs_url=None, redoc_url=None)
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request, exc):
+        return JSONResponse(status_code=422, content={"detail": [
+            {"loc": list(e["loc"]), "msg": e["msg"], "type": e["type"]} for e in exc.errors()
+        ]})
     app.state.sessions = sessions
     app.state.provider_client = client
     app.state.limiter = limiter
     origins = [x.strip() for x in os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",") if x.strip()]
     if "*" in origins:
         raise RuntimeError("CORS_ORIGINS must name explicit origins")
-    app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=False,
-                       allow_methods=["GET","POST","PUT","DELETE","OPTIONS"],
-                       allow_headers=["Authorization","Content-Type"])
 
     @app.middleware("http")
     async def guard(request: Request, call_next):
@@ -183,10 +187,45 @@ def create_app(database_url=None, initialize=False):
             generated = strategy(body.question)["queries"]
             from app.schemas import Query
             queries = [q if isinstance(q, Query) else Query.model_validate(q) for q in generated]
-        performed = [q for q in queries if q.enabled]
+        performed, requests, errors = [], [], []
+        year = datetime.now(timezone.utc).year
         provider = OpenAlex(app.state.provider_client, configuration())
-        results = await asyncio.gather(*(provider.search(q.query, body) for q in performed), return_exceptions=True)
-        papers, errors = [], []
+        for q in queries:
+            if not q.enabled:
+                continue
+            lower, upper = body.year_from, body.year_to
+            kind = q.kind.casefold()
+            recent = kind in {"recent", "recent literature"}
+            foundational = kind in {"foundational", "foundational candidates"}
+            review = kind in {"review", "review papers"}
+            if recent:
+                lower = max(lower or 1000, year - 4)
+            if foundational:
+                upper = min(upper or year, year - 8)
+            if lower and upper and lower > upper:
+                errors.append({"provider": "OpenAlex", "code": "incompatible_dates",
+                               "message": q.kind + " skipped: its date range conflicts with your year filter."})
+                continue
+            effective = body.model_copy(update={
+                "year_from": lower, "year_to": upper,
+                "reviews_only": (body.reviews_only or review) and not body.preprints_only,
+            })
+            applied = []
+            if lower:
+                applied.append(f"from_publication_date:{lower}-01-01")
+            if upper:
+                applied.append(f"to_publication_date:{upper}-12-31")
+            if body.oa_only:
+                applied.append("open_access.is_oa:true")
+            if body.preprints_only:
+                applied.append("type:preprint")
+            elif effective.reviews_only:
+                applied.append("type:review")
+            sort = "cited_by_count:desc" if foundational else "publication_date:desc" if recent else None
+            performed.append(q.model_copy(update={"filters": applied, "sort": sort}))
+            requests.append(provider.search(q.query, effective, sort=sort))
+        results = await asyncio.gather(*requests, return_exceptions=True)
+        papers = []
         for result in results:
             if isinstance(result, BaseException):
                 errors.append(error_for("OpenAlex", result))
@@ -235,5 +274,8 @@ def create_app(database_url=None, initialize=False):
     def configure(body: SettingsUpdate):
         with sessions() as session:
             return update_settings(session, body)
+    app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=False,
+                       allow_methods=["GET","POST","PUT","DELETE","OPTIONS"],
+                       allow_headers=["Authorization","Content-Type"])
     return app
 app = create_app()

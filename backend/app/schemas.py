@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 class StrictModel(BaseModel):
@@ -12,6 +12,7 @@ class Provenance(StrictModel):
     doi: str | None = Field(default=None, max_length=300)
     oa_status: str | None = Field(default=None, max_length=100)
     license: str | None = Field(default=None, max_length=2000)
+    raw_record: dict[str, Any] | None = None
 
 class Paper(StrictModel):
     id: str = Field(min_length=1, max_length=500)
@@ -65,6 +66,8 @@ class SearchRequest(Question):
 
     @model_validator(mode="after")
     def valid_years(self):
+        if self.reviews_only and self.preprints_only:
+            raise ValueError("Select reviews or preprints, not both")
         if self.year_from and self.year_to and self.year_from > self.year_to:
             raise ValueError("Start year must not exceed end year")
         return self

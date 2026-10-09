@@ -6,7 +6,7 @@ services:
       DATA_DIR: /data
       APP_ENV: ${APP_ENV:-development}
       APP_ACCESS_TOKEN: ${APP_ACCESS_TOKEN:-}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:8080}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080,http://127.0.0.1:8080}
       OPENALEX_API_KEY: ${OPENALEX_API_KEY:-}
       SEMANTIC_SCHOLAR_API_KEY: ${SEMANTIC_SCHOLAR_API_KEY:-}
       UNPAYWALL_EMAIL: ${UNPAYWALL_EMAIL:-}
