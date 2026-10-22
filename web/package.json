@@ -25,6 +25,6 @@
     "autoprefixer": "^10.4.20",
     "tsx": "^4.20.0",
     "@playwright/test": "^1.55.0",
-    "sharp": "^0.34.3"
+    "sharp": "^0.35.5"
   }
 }
